@@ -1,7 +1,9 @@
 input.onGesture(Gesture.Shake, function () {
 	
 })
-radio.setGroup(101)
+function Connect () {
+	
+}
 basic.forever(function () {
 	
 })
