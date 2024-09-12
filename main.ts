@@ -1,11 +1,5 @@
 function connect () {
-    basic.showLeds(`
-        . . . . .
-        . . . . .
-        . . . . .
-        . . . . .
-        . . . . .
-        `)
+    radio.setGroup(101)
 }
 input.onGesture(Gesture.Shake, function () {
 	
