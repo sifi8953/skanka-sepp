@@ -1,87 +1,77 @@
-function connect () {
-    radio.setGroup(101)
-    player_count = 0
-    connection_state = "searching"
-    basic.showLeds(`
-        # # # . .
-        . . . # .
-        # # . . #
-        . . # . #
-        # . # . #
-        `)
-    t0 = control.millis()
-    while (connection_state == "searching") {
-        if (control.millis() - t0 < 1000) {
-            radio.sendString("join_req")
-            basic.pause(100)
-        } else {
-            this_id = 0
-            player_count = 1
-            connection_state = "connected"
-        }
-    }
-    basic.showNumber(this_id)
+function long_to_str (num: number) {
+    return "" + String.fromCharCode(num % 2 ** 16) + String.fromCharCode(Math.trunc(num / 2 ** 16))
+}
+function extract_to (msg: string) {
+    return str_to_long(msg.substr(0, 2))
+}
+function pack_msg (to: number, id: number, _type: number, msg: string) {
+    return "" + long_to_str(to) + long_to_str(id) + String.fromCharCode(_type) + msg
+}
+function extract_type (msg: string) {
+    return msg.charCodeAt(4)
+}
+function extract_msg (msg: string) {
+    return msg.substr(5, msg.length - 5)
 }
 input.onButtonPressed(Button.A, function () {
-    if (connection_state == "connected") {
-        basic.showNumber(this_id)
-    }
+    basic.showString("" + (send_req(0, 99, "hej")))
 })
-input.onButtonPressed(Button.AB, function () {
-    if (connection_state == "connected") {
-        if (this_id == 0) {
-            radio.sendString("start")
-            connection_state = "playing"
-            start()
-        }
-    }
-})
-radio.onReceivedString(function (receivedString) {
-    if (receivedString == "join_req") {
-        if (connection_state == "connected") {
-            radio.sendValue("join_res", player_count)
-        }
-    } else if (receivedString == "start") {
-        connection_state = "playing"
-        start()
-    }
-})
-input.onButtonPressed(Button.B, function () {
-    if (connection_state == "connected") {
-        basic.showNumber(player_count)
-    }
-})
-input.onGesture(Gesture.Shake, function () {
-    if (connection_state == "connected") {
-        connect()
-    }
-})
-radio.onReceivedValue(function (name, value) {
-    if (name == "join_res") {
-        if (connection_state == "searching") {
-            this_id = value
-            player_count = value + 1
-            connection_state = "connected"
-            radio.sendValue("join_as", this_id)
-        }
-    } else if (name == "join_as") {
-        if (connection_state == "connected") {
-            player_count = value + 1
-        }
-    }
-})
-function start () {
-    basic.showLeds(`
-        . . . . .
-        . . . . .
-        # . # . #
-        . . . . .
-        . . . . .
-        `)
-    basic.pause(100)
+function str_to_long (str: string) {
+    return str.charCodeAt(0) + str.charCodeAt(1) * 2 ** 16
 }
-let this_id = 0
-let t0 = 0
-let connection_state = ""
-let player_count = 0
-connect()
+function send_res (to: number, id: number) {
+    radio.sendString("" + (pack_msg(to, id, 1, "")))
+    serial.writeLine("" + (extract_type(pack_msg(to, id, 1, ""))))
+}
+function extract_id (msg: string) {
+    return str_to_long(msg.substr(2, 2))
+}
+function send_msg_res (to: number, id: number, msg: string) {
+    message = pack_msg(to, id, 2, msg)
+    awaiting = true
+    while (awaiting) {
+        radio.sendString(message)
+        basic.pause(100)
+    }
+}
+radio.onReceivedString(function (receivedString) {
+    serial.writeLine("" + (extract_type(receivedString)))
+    if (extract_to(receivedString) == 0 || extract_to(receivedString) == control.deviceSerialNumber()) {
+        if (extract_type(receivedString) == 1) {
+            if (awaiting && extract_id(receivedString) == extract_id(message)) {
+                awaiting = false
+            }
+        } else if (extract_type(receivedString) == 2) {
+            if (awaiting && extract_id(receivedString) == extract_id(message)) {
+                response = extract_msg(receivedString)
+                awaiting = false
+            }
+            send_res(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString))
+        } else if (extract_type(receivedString) == 99) {
+            basic.showString("" + (extract_msg(receivedString)))
+            send_msg_res(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString), "abc")
+        }
+    }
+})
+function send_req (to: number, _type: number, msg: string) {
+    message = pack_msg(to, control.millis(), _type, msg)
+    awaiting = true
+    while (awaiting) {
+        radio.sendString(message)
+        basic.pause(100)
+    }
+    return response
+}
+function send_msg (to: number, _type: number, msg: string) {
+    message = pack_msg(to, control.millis(), _type, msg)
+    awaiting = true
+    while (awaiting) {
+        radio.sendString(message)
+        basic.pause(100)
+    }
+}
+let response = ""
+let awaiting = false
+let message = ""
+radio.setGroup(101)
+radio.setTransmitSerialNumber(true)
