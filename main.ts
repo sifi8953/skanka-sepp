@@ -21,7 +21,6 @@ function str_to_long (str: string) {
 }
 function send_res (to: number, id: number) {
     radio.sendString("" + (pack_msg(to, id, 1, "")))
-    serial.writeLine("" + (extract_type(pack_msg(to, id, 1, ""))))
 }
 function extract_id (msg: string) {
     return str_to_long(msg.substr(2, 2))
@@ -31,11 +30,10 @@ function send_msg_res (to: number, id: number, msg: string) {
     awaiting = true
     while (awaiting) {
         radio.sendString(message)
-        basic.pause(100)
+        basic.pause(1000)
     }
 }
 radio.onReceivedString(function (receivedString) {
-    serial.writeLine("" + (extract_type(receivedString)))
     if (extract_to(receivedString) == 0 || extract_to(receivedString) == control.deviceSerialNumber()) {
         if (extract_type(receivedString) == 1) {
             if (awaiting && extract_id(receivedString) == extract_id(message)) {
@@ -58,7 +56,7 @@ function send_req (to: number, _type: number, msg: string) {
     awaiting = true
     while (awaiting) {
         radio.sendString(message)
-        basic.pause(100)
+        basic.pause(1000)
     }
     return response
 }
@@ -67,7 +65,8 @@ function send_msg (to: number, _type: number, msg: string) {
     awaiting = true
     while (awaiting) {
         radio.sendString(message)
-        basic.pause(100)
+        basic.pause(1000)
+        radio.sendNumber(0)
     }
 }
 let response = ""
