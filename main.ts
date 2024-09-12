@@ -1,15 +1,3 @@
-function connect () {
-    radio.setGroup(101)
-}
-input.onGesture(Gesture.Shake, function () {
-	
-})
-
-basic.forever(function () {
-
-})
-
-
 let hideCursor = false
 let cursorY = 2
 let cursorX = 2
@@ -25,10 +13,9 @@ let myGrid: number[][] = [
     [0, 0, 0, 0, 0],
 ]
 
-radio.setGroup(101)
-
 led.plot(cursorX, cursorY)
 
+// Use tilt to select coordinates
 loops.everyInterval(250, function () {
     if (!(hideCursor)) {
         // Only update cursor if a shot hasn't been fired
@@ -78,9 +65,6 @@ radio.onReceivedString(function (receivedMessage: string) {
         }
     }
 })
-
-
-
 
 // Function for firing
 function fire(target: string, x: number, y: number) {
