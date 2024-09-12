@@ -1,7 +1,4 @@
-input.onGesture(Gesture.Shake, function () {
-	
-})
-function Connect () {
+function connect () {
     basic.showLeds(`
         . . . . .
         . . . . .
@@ -10,6 +7,9 @@ function Connect () {
         . . . . .
         `)
 }
+input.onGesture(Gesture.Shake, function () {
+	
+})
 radio.setGroup(101)
 basic.forever(function () {
 	
