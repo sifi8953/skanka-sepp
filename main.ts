@@ -10,12 +10,11 @@ function connect () {
         . . . . .
         `)
     for (let index = 0; index < 50; index++) {
-    	
-    }
-    while (connection_state == "searching") {
         if (connection_state == "searching") {
             radio.sendString("join request")
             basic.pause(100)
+        } else {
+            break;
         }
     }
 }
@@ -28,9 +27,13 @@ radio.onReceivedString(function (receivedString) {
 })
 radio.onReceivedValue(function (name, value) {
     if (connection_state == "searching") {
-    	
+        if (name == "join anwer") {
+            this_id = value
+            radio.sendValue("joining as", this_id)
+        }
     }
 })
+let this_id = 0
 let connection_state = ""
 let player_count = 0
 connect()
