@@ -1,9 +1,6 @@
 function long_to_str (num: number) {
     return "" + String.fromCharCode(num % 2 ** 16) + String.fromCharCode(Math.trunc(num / 2 ** 16))
 }
-control.onEvent(1024, 99, function () {
-    basic.showString(received)
-})
 function extract_to (msg: string) {
     return str_to_long(msg.substr(0, 2))
 }
@@ -16,9 +13,6 @@ function extract_type (msg: string) {
 function extract_msg (msg: string) {
     return msg.substr(5, msg.length - 5)
 }
-input.onButtonPressed(Button.A, function () {
-    basic.showString("" + (send_req(0, 99, "hej")))
-})
 function send_fin (to: number, id: number) {
     radio.sendString("" + (pack_msg(to, id, 1, "")))
 }
@@ -33,8 +27,21 @@ function send_res (to: number, id: number, msg: string, event: number) {
     1
     )
 }
+input.onButtonPressed(Button.A, function () {
+    basic.showString("" + (send_req(0, 203, "hej")))
+})
 function extract_id (msg: string) {
     return str_to_long(msg.substr(2, 2))
+}
+function send_req (to: number, _type: number, msg: string) {
+    message = pack_msg(to, control.millis(), _type, msg)
+    event_channel = 2
+    control.raiseEvent(
+    1024,
+    1
+    )
+    control.waitForEvent(1024, 2)
+    return response
 }
 radio.onReceivedString(function (receivedString) {
     if (extract_to(receivedString) == 0 || extract_to(receivedString) == control.deviceSerialNumber()) {
@@ -48,22 +55,28 @@ radio.onReceivedString(function (receivedString) {
                 awaiting = false
             }
             send_fin(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString))
-        } else if (extract_type(receivedString) == 99) {
-            received = extract_msg(receivedString)
-            send_res(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString), "abc", extract_type(receivedString))
+        } else if (100 <= extract_type(receivedString) && extract_type(receivedString) < 200) {
+            if (handled_ids.indexOf(extract_id(message)) == -1) {
+                handled_ids.push(extract_id(message))
+                received = extract_msg(receivedString)
+                control.raiseEvent(
+                1024,
+                extract_type(receivedString)
+                )
+            }
+            send_fin(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString))
+        } else if (200 <= extract_type(receivedString) && extract_type(receivedString) < 300) {
+            if (handled_ids.indexOf(extract_id(message)) == -1) {
+                handled_ids.push(extract_id(message))
+                received = extract_msg(receivedString)
+                send_res(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString), "abc", extract_type(receivedString))
+            }
         }
     }
 })
-function send_req (to: number, _type: number, msg: string) {
-    message = pack_msg(to, control.millis(), _type, msg)
-    event_channel = 2
-    control.raiseEvent(
-    1024,
-    1
-    )
-    control.waitForEvent(1024, 2)
-    return response
-}
+input.onButtonPressed(Button.B, function () {
+    send_msg(0, 102, "123")
+})
 function send_msg (to: number, _type: number, msg: string) {
     message = pack_msg(to, control.millis(), _type, msg)
     event_channel = 2
@@ -73,11 +86,13 @@ function send_msg (to: number, _type: number, msg: string) {
     )
     control.waitForEvent(1024, 2)
 }
-let response = ""
+let received = ""
 let awaiting = false
+let response = ""
 let event_channel = 0
 let message = ""
-let received = ""
+let handled_ids: number[] = []
+handled_ids = []
 radio.setGroup(101)
 radio.setTransmitSerialNumber(true)
 control.inBackground(function () {
