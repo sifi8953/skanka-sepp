@@ -1,11 +1,9 @@
 function long_to_str (num: number) {
     return "" + String.fromCharCode(num % 2 ** 16) + String.fromCharCode(Math.trunc(num / 2 ** 16))
 }
-function send_req_res (to: number, id: number, msg: string) {
-    message = pack_msg(to, id, 2, msg)
-    awaiting = true
-    control.waitForEvent(EventBusSource.MICROBIT_ID_RADIO, 1)
-}
+control.onEvent(1024, 99, function () {
+    basic.showString(received)
+})
 function extract_to (msg: string) {
     return str_to_long(msg.substr(0, 2))
 }
@@ -21,59 +19,78 @@ function extract_msg (msg: string) {
 input.onButtonPressed(Button.A, function () {
     basic.showString("" + (send_req(0, 99, "hej")))
 })
+function send_fin (to: number, id: number) {
+    radio.sendString("" + (pack_msg(to, id, 1, "")))
+}
 function str_to_long (str: string) {
     return str.charCodeAt(0) + str.charCodeAt(1) * 2 ** 16
 }
-function send_res (to: number, id: number) {
-    radio.sendString("" + (pack_msg(to, id, 1, "")))
+function send_res (to: number, id: number, msg: string, event: number) {
+    message = pack_msg(to, id, 2, msg)
+    event_channel = event
+    control.raiseEvent(
+    1024,
+    1
+    )
 }
 function extract_id (msg: string) {
     return str_to_long(msg.substr(2, 2))
 }
 radio.onReceivedString(function (receivedString) {
-    serial.writeLine("" + (extract_type(receivedString)))
     if (extract_to(receivedString) == 0 || extract_to(receivedString) == control.deviceSerialNumber()) {
         if (extract_type(receivedString) == 1) {
             if (awaiting && extract_id(receivedString) == extract_id(message)) {
-                fin_res()
+                awaiting = false
             }
         } else if (extract_type(receivedString) == 2) {
             if (awaiting && extract_id(receivedString) == extract_id(message)) {
                 response = extract_msg(receivedString)
-                fin_res()
+                awaiting = false
             }
-            send_res(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString))
+            send_fin(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString))
         } else if (extract_type(receivedString) == 99) {
-            basic.showString("" + (extract_msg(receivedString)))
-            send_req_res(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString), "abc")
+            received = extract_msg(receivedString)
+            send_res(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString), "abc", extract_type(receivedString))
         }
     }
 })
 function send_req (to: number, _type: number, msg: string) {
     message = pack_msg(to, control.millis(), _type, msg)
-    awaiting = true
-    control.waitForEvent(EventBusSource.MICROBIT_ID_RADIO, 1)
-    return response
-}
-function fin_res () {
-    awaiting = false
+    event_channel = 2
     control.raiseEvent(
-    EventBusSource.MICROBIT_ID_RADIO,
+    1024,
     1
     )
+    control.waitForEvent(1024, 2)
+    return response
 }
 function send_msg (to: number, _type: number, msg: string) {
     message = pack_msg(to, control.millis(), _type, msg)
-    awaiting = true
-    control.waitForEvent(EventBusSource.MICROBIT_ID_RADIO, 1)
+    event_channel = 2
+    control.raiseEvent(
+    1024,
+    1
+    )
+    control.waitForEvent(1024, 2)
 }
 let response = ""
 let awaiting = false
+let event_channel = 0
 let message = ""
+let received = ""
 radio.setGroup(101)
 radio.setTransmitSerialNumber(true)
-loops.everyInterval(500, function () {
-    if (awaiting) {
-        radio.sendString(message)
+control.inBackground(function () {
+    while (true) {
+        control.waitForEvent(1024, 1)
+        awaiting = true
+        while (awaiting) {
+            radio.sendString(message)
+            basic.pause(500)
+        }
+        control.raiseEvent(
+        1024,
+        event_channel
+        )
     }
 })
