@@ -1,95 +1,109 @@
-let hideCursor = false
-let cursorY = 2
-let cursorX = 2
+let opponentId = 0
 
-let myId = "A"
-let opponent = "B"
+let target = 0
+let status = false
 
-let myGrid: number[][] = [
+let cursorActive = false
+let cursorY = 0
+let cursorX = 0
+let accY = 0
+let accX = 0
+
+let y = 0
+let x = 0
+let coord = ""
+
+let myGrid: number[][] = []
+myGrid = [
     [0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0],
-    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0]
 ]
 
-led.plot(cursorX, cursorY)
 
-// Use tilt to select coordinates
-loops.everyInterval(250, function () {
-    if (!(hideCursor)) {
-        // Only update cursor if a shot hasn't been fired
-        // Get accelerometer values for X and Y
-        let accX = input.acceleration(Dimension.X)
-        let accY = input.acceleration(Dimension.Y)
-        // Unplot current cursor position
-        led.unplot(cursorX, cursorY)
-        // Move left or right based on X acceleration
-        if (accX < -500) {
-            cursorX = (cursorX - 1 + 5) % 5
-        } else if (accX > 500) {
-            cursorX = (cursorX + 1) % 5
-        }
-        // Move up or down based on Y acceleration
-        if (accY < -500) {
-            cursorY = (cursorY - 1 + 5) % 5
-        } else if (accY > 500) {
-            cursorY = (cursorY + 1) % 5
-        }
-        // Plot new cursor position
-        led.plot(cursorX, cursorY)
-    }
-})
+initComms()
 
-
-// Check for incoming fire from other players
-radio.onReceivedString(function (receivedMessage: string) {
-    let parsedMessage
-    try {
-        parsedMessage = JSON.parse(receivedMessage)
-    } catch (error) {
-        // Handle invalid message here
-        return // Exit if parsing fails
-    }
-
-    let target = parsedMessage.target
-    let x = parseInt(parsedMessage.x)
-    let y = parseInt(parsedMessage.y)
-
-    // If player receives a string that matches their id, it will send "hit" or "miss"
-    if (target == myId) {
-        if (myGrid[y][x] == 1) {
-            radio.sendString("hit")
-        } else {
-            radio.sendString("miss")
-        }
-    }
-})
-
-// Function for firing
-function fire(target: string, x: number, y: number) {
-    // Create a structured string using JSON-like formatting
-    let message = `{"target": "${target}", "x": ${x}, "y": ${y}}`
-    radio.sendString(message)
+function initComms () {
+    radio.setGroup(101)
+    radio.setTransmitSerialNumber(true)
 }
 
-// Register radio listener globally, once
-radio.onReceivedString(function (receivedMessage: string) {
-    if (receivedMessage == "hit") {
+
+initCursor()
+
+function initCursor () {
+    cursorX = 2
+    cursorY = 2
+    showCursor()
+    while (cursorActive) {
+        updateCursor()
+        if (input.buttonIsPressed(Button.AB)) {
+            hideCursor()
+        }
+        basic.pause(200)
+    }
+}
+
+function updateCursor () {
+    accX = input.acceleration(Dimension.X)
+    accY = input.acceleration(Dimension.Y)
+    led.unplot(cursorX, cursorY)
+    if (accX < -500) {
+        cursorX = (cursorX - 1 + 5) % 5
+    } else if (accX > 500) {
+        cursorX = (cursorX + 1) % 5
+    }
+    if (accY < -500) {
+        cursorY = (cursorY - 1 + 5) % 5
+    } else if (accY > 500) {
+        cursorY = (cursorY + 1) % 5
+    }
+    led.plot(cursorX, cursorY)
+}
+
+function hideCursor () {
+    cursorActive = false
+    led.unplot(cursorX, cursorY)
+}
+
+function showCursor () {
+    cursorActive = true
+    led.plot(cursorX, cursorY)
+}
+
+
+// Fire to send x and y coordinates to opponent
+function fire () {
+    coord = "" + cursorX + cursorY
+    // Add code for sending fire coordinates to opponent
+}
+
+// Respond to opponent if incoming fire hit or miss
+function sendHitStatus (receivedString: string) {
+    opponentId = 0  // Temporary
+    x = parseFloat(receivedString.charAt(0))
+    y = parseFloat(receivedString.charAt(1))
+    status = isHit(x, y)
+    // Add code for responding fire status to oppontent
+}
+
+// Check if opponent fire hit or missed
+function isHit (x: number, y: number) {
+    target = myGrid[y][x]
+    if (target == 1) {
+        return true
+    } else {
+        return false
+    }
+}
+
+// Show if player fire is a hit or miss
+function fireFeedback (receivedString: string) {
+    if (receivedString == "hit") {
         basic.showIcon(IconNames.Happy)
-    } else if (receivedMessage == "miss") {
+    } else {
         basic.showIcon(IconNames.Sad)
     }
-    basic.pause(500)
-    basic.clearScreen()
-    hideCursor = false // Allow cursor movement again after showing hit/miss result
-})
-
-// Function for firing
-input.onButtonPressed(Button.AB, function () {
-    // Hide cursor after firing
-    led.unplot(cursorX, cursorY)
-    hideCursor = true
-    // Fire shot
-    fire(opponent, cursorX, cursorY)
-})
+}
