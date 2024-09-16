@@ -1,20 +1,128 @@
-let opponentId = 0
+let awaiting = false
+let event_channel = 0
 
-let target = 0
-let status = false
+let message = ""
+let received = ""
+let response = ""
 
-let cursorActive = false
-let cursorY = 0
-let cursorX = 0
-let accY = 0
-let accX = 0
+let handled_ids: number[] = []
+handled_ids = []
 
-let y = 0
-let x = 0
-let coord = ""
+radio.setGroup(101)
+radio.setTransmitSerialNumber(true)
 
-let myGrid: number[][] = []
-myGrid = [
+control.inBackground(function () {
+    while (true) {
+        control.waitForEvent(1024, 1)
+        awaiting = true
+        while (awaiting) {
+            radio.sendString(message)
+            basic.pause(500)
+        }
+        control.raiseEvent(1024, event_channel)
+    }
+})
+
+// Event handler for transmitting fire
+control.onEvent(1024, 299, function () {
+    basic.showString(received)
+})
+
+radio.onReceivedString(function (receivedString) {
+    if (extract_to(receivedString) == 0 || extract_to(receivedString) == control.deviceSerialNumber()) {
+        if (extract_type(receivedString) == 1) {
+            if (awaiting && extract_id(receivedString) == extract_id(message)) {
+                awaiting = false
+            }
+        } else if (extract_type(receivedString) == 2) {
+            if (awaiting && extract_id(receivedString) == extract_id(message)) {
+                response = extract_msg(receivedString)
+                awaiting = false
+            }
+            send_fin(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString))
+        } else if (100 <= extract_type(receivedString) && extract_type(receivedString) < 200) {
+            if (handled_ids.indexOf(extract_id(message)) == -1) {
+                handled_ids.push(extract_id(message))
+                received = extract_msg(receivedString)
+                control.raiseEvent(1024, extract_type(receivedString))
+            }
+            send_fin(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString))
+        } else if (200 <= extract_type(receivedString) && extract_type(receivedString) < 300) {
+            if (handled_ids.indexOf(extract_id(message)) == -1) {
+                handled_ids.push(extract_id(message))
+                received = extract_msg(receivedString)
+                send_res(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString), req_handler(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString), extract_type(receivedString), extract_msg(receivedString)), extract_type(receivedString))
+            }
+        }
+    }
+})
+
+function req_handler(_from: number, id: number, _type: number, msg: string) {
+    if (_type == 299) {
+        return checkFireResult(received)
+    } else {
+        return ""
+    }
+}
+
+function send_req(to: number, _type: number, msg: string) {
+    message = pack_msg(to, control.millis(), _type, msg)
+    event_channel = 2
+    control.raiseEvent(1024, 1)
+    control.waitForEvent(1024, 2)
+    return response
+}
+
+function send_res(to: number, id: number, msg: string, event: number) {
+    message = pack_msg(to, id, 2, msg)
+    event_channel = event
+    control.raiseEvent(1024, 1)
+}
+
+function send_msg(to: number, _type: number, msg: string) {
+    message = pack_msg(to, control.millis(), _type, msg)
+    event_channel = 2
+    control.raiseEvent(1024, 1)
+    control.waitForEvent(1024, 2)
+}
+
+function send_fin(to: number, id: number) {
+    radio.sendString("" + (pack_msg(to, id, 1, "")))
+}
+
+function pack_msg(to: number, id: number, _type: number, msg: string) {
+    return "" + long_to_str(to) + long_to_str(id) + String.fromCharCode(_type) + msg
+}
+
+function extract_msg(msg: string) {
+    return msg.substr(5, msg.length - 5)
+}
+
+function extract_type(msg: string) {
+    return msg.charCodeAt(4)
+}
+
+function extract_to(msg: string) {
+    return str_to_long(msg.substr(0, 2))
+}
+
+function extract_id(msg: string) {
+    return str_to_long(msg.substr(2, 2))
+}
+
+function long_to_str(num: number) {
+    return "" + String.fromCharCode(num % 2 ** 16) + String.fromCharCode(Math.trunc(num / 2 ** 16))
+}
+
+function str_to_long(str: string) {
+    return str.charCodeAt(0) + str.charCodeAt(1) * 2 ** 16
+}
+
+
+let isCursorActive = false
+let cursorPosX = 2
+let cursorPosY = 2
+let playerGrid: number[][] = [
     [0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0],
     [0, 0, 0, 0, 0],
@@ -22,88 +130,79 @@ myGrid = [
     [0, 0, 0, 0, 0]
 ]
 
+showCursor()
 
-initComms()
+function showCursor() {
+    isCursorActive = true
+    led.plot(cursorPosX, cursorPosY)
 
-function initComms () {
-    radio.setGroup(101)
-    radio.setTransmitSerialNumber(true)
-}
-
-
-initCursor()
-
-function initCursor () {
-    cursorX = 2
-    cursorY = 2
-    showCursor()
-    while (cursorActive) {
+    while (isCursorActive) {
         updateCursor()
         if (input.buttonIsPressed(Button.AB)) {
             hideCursor()
+            fireAtTarget()
         }
         basic.pause(200)
     }
 }
 
-function updateCursor () {
-    accX = input.acceleration(Dimension.X)
-    accY = input.acceleration(Dimension.Y)
-    led.unplot(cursorX, cursorY)
+function hideCursor() {
+    isCursorActive = false
+    led.unplot(cursorPosX, cursorPosY)
+}
+
+function updateCursor() {
+    let accX = input.acceleration(Dimension.X)
+    let accY = input.acceleration(Dimension.Y)
+    led.unplot(cursorPosX, cursorPosY)
+
     if (accX < -500) {
-        cursorX = (cursorX - 1 + 5) % 5
+        cursorPosX = (cursorPosX - 1 + 5) % 5
     } else if (accX > 500) {
-        cursorX = (cursorX + 1) % 5
+        cursorPosX = (cursorPosX + 1) % 5
     }
     if (accY < -500) {
-        cursorY = (cursorY - 1 + 5) % 5
+        cursorPosY = (cursorPosY - 1 + 5) % 5
     } else if (accY > 500) {
-        cursorY = (cursorY + 1) % 5
+        cursorPosY = (cursorPosY + 1) % 5
     }
-    led.plot(cursorX, cursorY)
+
+    led.plot(cursorPosX, cursorPosY)
 }
 
-function hideCursor () {
-    cursorActive = false
-    led.unplot(cursorX, cursorY)
+function fireAtTarget() {
+    const targetPos = "" + cursorPosX + cursorPosY
+    const fireResult = send_req(0, 299, targetPos)
+    displayFireResult(fireResult)
 }
 
-function showCursor () {
-    cursorActive = true
-    led.plot(cursorX, cursorY)
-}
-
-
-// Fire to send x and y coordinates to opponent
-function fire () {
-    coord = "" + cursorX + cursorY
-    // Add code for sending fire coordinates to opponent
-}
-
-// Respond to opponent if incoming fire hit or miss
-function sendHitStatus (receivedString: string) {
-    opponentId = 0  // Temporary
-    x = parseFloat(receivedString.charAt(0))
-    y = parseFloat(receivedString.charAt(1))
-    status = isHit(x, y)
-    // Add code for responding fire status to oppontent
-}
-
-// Check if opponent fire hit or missed
-function isHit (x: number, y: number) {
-    target = myGrid[y][x]
-    if (target == 1) {
-        return true
-    } else {
-        return false
-    }
-}
-
-// Show if player fire is a hit or miss
-function fireFeedback (receivedString: string) {
+function displayFireResult(receivedString: string) {
     if (receivedString == "hit") {
         basic.showIcon(IconNames.Happy)
-    } else {
+    } else if (receivedString == "miss") {
         basic.showIcon(IconNames.Sad)
+    }
+}
+
+function checkFireResult(receivedString: string) {
+    const x = parseInt(receivedString.charAt(0))
+    const y = parseInt(receivedString.charAt(1))
+    const checkFire = playerGrid[y][x]
+    if (checkFire) {
+        return "hit"
+    } else {
+        return "miss"
+    }
+}
+
+function displayGrid(grid: number[][]) {
+    for (let x = 0; x <= 4; x++) {
+        for (let y = 0; y <= 4; y++) {
+            if (grid[x][y] == 1) {
+                led.plot(x, y)
+            } else {
+                led.unplot(x, y)
+            }
+        }
     }
 }
