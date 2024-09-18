@@ -1,46 +1,42 @@
+// sifi8953
+
 let awaiting = false
-let event_channel = 0
+let can_handle = false
+let timed_out = false
+let is_playing = false
+let connected = false  // Fix for connect()
 
 let message = ""
 let received = ""
 let response = ""
 
-let handled_ids: number[][] = []
+let player_count = 0
+let this_id = -1
+let wait_until = -1
+let event_channel = 0
+let received_serial_num = 0
+
+let player_statuses: number[] = []
+let player_latest_pings: number[] = []
+let player_serial_nums: number[] = []
+let handled_msgs: number[][] = []
 
 radio.setGroup(101)
 radio.setTransmitSerialNumber(true)
 
-control.inBackground(function () {
-    while (true) {
-        control.waitForEvent(1024, 1)
-        awaiting = true
-        while (awaiting) {
-            radio.sendString(message)
-            basic.pause(500)
-        }
-        control.raiseEvent(1024, event_channel)
+control.onEvent(1024, 11, function () {
+    while (player_serial_nums.length <= received.charCodeAt(0)) {
+        player_serial_nums.push(-1)
+        player_latest_pings.push(-1)
+        player_statuses.push(-1)
     }
+    player_serial_nums[received.charCodeAt(0)] = received_serial_num
+    player_latest_pings[received.charCodeAt(0)] = control.millis()
+    player_statuses[received.charCodeAt(0)] = 1
 })
 
-control.onEvent(1024, 102, function () {
-    basic.showString(received)
-})
-
-control.onEvent(1024, 203, function () {
-    basic.showString(received)
-})
-
-// Event handler for receiving fire
 control.onEvent(1024, 299, function () {
     basic.showString(received)
-})
-
-input.onButtonPressed(Button.A, function () {
-    basic.showString("" + (send_req(0, 203, "hej")))
-})
-
-input.onButtonPressed(Button.B, function () {
-    send_msg(0, 102, "123")
 })
 
 radio.onReceivedString(function (receivedString) {
@@ -56,35 +52,57 @@ radio.onReceivedString(function (receivedString) {
             }
             send_fin(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString))
         } else if (100 <= extract_type(receivedString) && extract_type(receivedString) < 200) {
-            if (!awaiting) {
-                if (handled_ids.indexOf([radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString)]) == -1) {
-                    handled_ids.push([radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString)])
+            if (!(awaiting)) {
+                if (handled_msgs.indexOf([radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString)]) == -1) {
+                    handled_msgs.push([radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString)])
                     received = extract_msg(receivedString)
-                    control.raiseEvent(
-                        1024,
-                        extract_type(receivedString)
-                    )
+                    received_serial_num = radio.receivedPacket(RadioPacketProperty.SerialNumber)
+                    control.raiseEvent(1024, extract_type(receivedString))
                 }
                 send_fin(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString))
             }
         } else if (200 <= extract_type(receivedString) && extract_type(receivedString) < 300) {
-            if (!awaiting) {
-                if (handled_ids.indexOf([radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString)]) == -1) {
-                    handled_ids.push([radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString)])
+            if (!(awaiting)) {
+                if (handled_msgs.indexOf([radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString)]) == -1) {
+                    handled_msgs.push([radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString)])
                     received = extract_msg(receivedString)
-                    send_res(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString), req_handler(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString), extract_type(receivedString), extract_msg(receivedString)), extract_type(receivedString))
+                    received_serial_num = radio.receivedPacket(RadioPacketProperty.SerialNumber)
+                    let tmp_str = req_handler(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString), extract_type(receivedString), extract_msg(receivedString))
+                    if (can_handle) {
+                        send_res(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString), tmp_str, extract_type(receivedString))
+                    }
                 }
+            }
+        } else {
+            if (handled_msgs.indexOf([radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString)]) == -1) {
+                handled_msgs.push([radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString)])
+                received = extract_msg(receivedString)
+                received_serial_num = radio.receivedPacket(RadioPacketProperty.SerialNumber)
+                control.raiseEvent(1024, extract_type(receivedString))
             }
         }
     }
 })
 
 function req_handler(_from: number, id: number, _type: number, msg: string) {
-    if (_type == 203) {
-        return "abcd"
+    can_handle = true
+    if (_type == 201) {
+        if (this_id == -1) {
+            can_handle = false
+            return ""
+        } else {
+            if (player_serial_nums.indexOf(_from) != -1) {
+                return String.fromCharCode(player_serial_nums.indexOf(_from))
+            } else if (is_playing) {
+                return String.fromCharCode(65535)
+            } else {
+                return String.fromCharCode(player_serial_nums.length)
+            }
+        }
     } else if (_type == 299) {
         return getFireResult(received)
     } else {
+        can_handle = false
         return ""
     }
 }
@@ -118,14 +136,6 @@ function pack_msg(to: number, id: number, _type: number, msg: string) {
     return "" + long_to_str(to) + long_to_str(id) + String.fromCharCode(_type) + msg
 }
 
-function extract_msg(msg: string) {
-    return msg.substr(5, msg.length - 5)
-}
-
-function extract_type(msg: string) {
-    return msg.charCodeAt(4)
-}
-
 function extract_to(msg: string) {
     return str_to_long(msg.substr(0, 2))
 }
@@ -134,14 +144,128 @@ function extract_id(msg: string) {
     return str_to_long(msg.substr(2, 2))
 }
 
-function long_to_str(num: number) {
-    return "" + String.fromCharCode(num % 2 ** 16) + String.fromCharCode(Math.trunc(num / 2 ** 16))
+function extract_type(msg: string) {
+    return msg.charCodeAt(4)
+}
+
+function extract_msg(msg: string) {
+    return msg.substr(5, msg.length - 5)
 }
 
 function str_to_long(str: string) {
     return str.charCodeAt(0) + str.charCodeAt(1) * 2 ** 16
 }
 
+function long_to_str(num: number) {
+    return "" + String.fromCharCode(num % 2 ** 16) + String.fromCharCode(Math.trunc(num / 2 ** 16))
+}
+
+function connect() {
+    set_timeout(3000)
+    send_req(0, 201, "")
+    if (timed_out) {
+        this_id = 0
+    } else {
+        this_id = response.charCodeAt(0)
+    }
+    if (this_id == 65535) {
+        this_id = -1
+    }
+    if (this_id != -1) {
+        while (player_serial_nums.length <= this_id) {
+            player_serial_nums.push(-1)
+            player_latest_pings.push(-1)
+            player_statuses.push(-1)
+        }
+        player_serial_nums[this_id] = control.deviceSerialNumber()
+        player_statuses[received.charCodeAt(0)] = 2
+    }
+    connected = true  // Fix for connect()
+}
+
+function set_timeout(time: number) {
+    timed_out = false
+    wait_until = control.millis() + time
+}
+
+input.onGesture(Gesture.Shake, function () {
+    if (!is_playing) {
+        if (!connected) {  // Fix for connect()
+            connect()
+        }
+        if (this_id != -1) {
+            basic.showNumber(this_id)
+        } else {
+            basic.showIcon(IconNames.No)
+        }
+    }
+})
+
+input.onButtonPressed(Button.A, function () {
+    if (!is_playing) {
+        if (this_id != -1) {
+            basic.showNumber(this_id)
+        } else {
+            basic.showIcon(IconNames.No)
+        }
+    }
+})
+
+input.onButtonPressed(Button.B, function () {
+    if (!is_playing) {
+        basic.showNumber(player_count)
+    }
+})
+
+input.onButtonPressed(Button.AB, function () {
+    if (!is_playing) {
+        if (this_id != -1) {
+            is_playing = true
+            basic.showIcon(IconNames.Yes)
+
+            // Subject to change
+            basic.clearScreen()
+            showCursor()
+        }
+    }
+})
+
+control.inBackground(function () {
+    while (true) {
+        control.waitForEvent(1024, 1)
+        awaiting = true
+        while (awaiting) {
+            radio.sendString(message)
+            basic.pause(500)
+            if (wait_until != -1 && control.millis() > wait_until) {
+                wait_until = -1
+                timed_out = true
+                awaiting = false
+            }
+        }
+        control.raiseEvent(1024, event_channel)
+    }
+})
+
+loops.everyInterval(1000, function () {
+    player_count = 0
+    for (let index = 0; index <= player_serial_nums.length - 1; index++) {
+        if (index != this_id) {
+            if (control.millis() > player_latest_pings[index] + 10000) {
+                player_statuses[index] = 0
+            } else {
+                player_count += 1
+            }
+        }
+    }
+    if (this_id != -1) {
+        player_count += 1
+        radio.sendString("" + (pack_msg(0, control.millis(), 11, String.fromCharCode(this_id))))
+    }
+})
+
+
+// zayo7445
 
 // Variables for cursor state and position
 let isCursorActive = false
@@ -158,9 +282,7 @@ let playerGrid: number[][] = [
 ]
 
 // Enemy ID for targeting in the game
-let enemyId: number = 0
-
-showCursor()
+let enemyId: number = 0  // Subject to change
 
 // Function to show the cursor
 function showCursor() {
@@ -173,7 +295,7 @@ function showCursor() {
             hideCursor()
             fireAtTarget()
         }
-        basic.pause(200)
+        basic.pause(300)
     }
 }
 
@@ -243,3 +365,4 @@ function displayGrid(grid: number[][]) {
         }
     }
 }
+
