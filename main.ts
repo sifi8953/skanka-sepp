@@ -1,3 +1,80 @@
+/**
+ * Make an if statement to make this not equal own id when making turn based
+ */
+/**
+ * sifi8953
+ */
+/**
+ * Fix for connect()
+ */
+/**
+ * zayo7445
+ */
+/**
+ * Variables for cursor state and position
+ */
+/**
+ * Enemy ID for targeting in the game
+ */
+// Function to display the result of the fire action (hit or miss)
+function displayFireResult (receivedString: string) {
+    if (receivedString == "hit") {
+        basic.showIcon(IconNames.Happy)
+    } else if (receivedString == "miss") {
+        basic.showIcon(IconNames.Sad)
+    }
+}
+function long_to_str (num: number) {
+    return "" + String.fromCharCode(num % 2 ** 16) + String.fromCharCode(Math.trunc(num / 2 ** 16))
+}
+// Function to update the cursor position based on accelerometer data
+function updateCursor () {
+    accX = input.acceleration(Dimension.X)
+    accY = input.acceleration(Dimension.Y)
+    if (!(alreadyHit)) {
+        led.unplot(cursorPosX, cursorPosY)
+    }
+    if (accX < -500) {
+        cursorPosX = (cursorPosX - 1 + 5) % 5
+    } else if (accX > 500) {
+        cursorPosX = (cursorPosX + 1) % 5
+    }
+    if (accY < -500) {
+        cursorPosY = (cursorPosY - 1 + 5) % 5
+    } else if (accY > 500) {
+        cursorPosY = (cursorPosY + 1) % 5
+    }
+    alreadyHit = led.point(cursorPosX, cursorPosY)
+    led.plot(cursorPosX, cursorPosY)
+}
+function connect () {
+    set_timeout(3000)
+    send_req(0, 201, "")
+    if (timed_out) {
+        this_id = 0
+    } else {
+        this_id = response.charCodeAt(0)
+    }
+    if (this_id == 65535) {
+        this_id = -1
+    }
+    if (this_id != -1) {
+        while (player_serial_nums.length <= this_id) {
+            player_serial_nums.push(-1)
+            player_latest_pings.push(-1)
+            player_statuses.push(-1)
+            playersHitBoard.push([])
+        }
+        player_serial_nums[this_id] = control.deviceSerialNumber()
+        player_statuses[received.charCodeAt(0)] = 2
+    }
+}
+function extract_to (msg: string) {
+    return str_to_long(msg.substr(0, 2))
+}
+function pack_msg (to: number, id: number, _type: number, msg: string) {
+    return "" + long_to_str(to) + long_to_str(id) + String.fromCharCode(_type) + msg
+}
 function showBoard (target: number) {
     for (let value of playersHitBoard[target]) {
         tempValueX = convertToText(value).substr(2, 1)
@@ -5,21 +82,41 @@ function showBoard (target: number) {
         led.plot(parseInt(tempValueX), parseInt(tempValueY))
     }
 }
-input.onButtonPressed(Button.A, function () {
-    if (currentlyShooting) {
-        if (alreadyHit == false) {
-            led.unplot(shootingTargetX, shootingTargetY)
-        }
-        shootingTargetX += 1
-        if (shootingTargetX > 4) {
-            shootingTargetX = 0
-        }
-        if (led.point(shootingTargetX, shootingTargetY)) {
-            alreadyHit = true
+function req_handler (_from: number, id: number, _type: number, msg: string) {
+    can_handle = true
+    if (_type == 201) {
+        if (this_id == -1) {
+            can_handle = false
+            return ""
         } else {
-            alreadyHit = false
+            if (player_serial_nums.indexOf(_from) != -1) {
+                return String.fromCharCode(player_serial_nums.indexOf(_from))
+            } else if (is_playing) {
+                return String.fromCharCode(65535)
+            } else {
+                return String.fromCharCode(player_serial_nums.length)
+            }
         }
-        led.plot(shootingTargetX, shootingTargetY)
+    } else if (_type == 299) {
+        return getFireResult(received)
+    } else {
+        can_handle = false
+        return ""
+    }
+}
+function extract_type (msg: string) {
+    return msg.charCodeAt(4)
+}
+function extract_msg (msg: string) {
+    return msg.substr(5, msg.length - 5)
+}
+input.onButtonPressed(Button.A, function () {
+    if (!(is_playing)) {
+        if (this_id != -1) {
+            basic.showNumber(this_id)
+        } else {
+            basic.showIcon(IconNames.No)
+        }
     } else {
         basic.clearScreen()
         targetedPlayer += -1
@@ -32,42 +129,126 @@ input.onButtonPressed(Button.A, function () {
         showBoard(targetedPlayer)
     }
 })
-function Shoot (playerToShoot: number) {
-    shootingTargetX = 0
-    shootingTargetY = 0
-    if (led.point(shootingTargetX, shootingTargetY)) {
-        alreadyHit = true
-    } else {
-        alreadyHit = false
+function send_fin (to: number, id: number) {
+    radio.sendString("" + (pack_msg(to, id, 1, "")))
+}
+function str_to_long (str: string) {
+    return str.charCodeAt(0) + str.charCodeAt(1) * 2 ** 16
+}
+// Function to display the current state of the grid on the LED
+function displayGrid (grid: number[][]) {
+    for (let x2 = 0; x2 <= 4; x2++) {
+        for (let y2 = 0; y2 <= 4; y2++) {
+            if (grid[y2][x2] == 1) {
+                led.plot(x2, y2)
+            } else {
+                led.unplot(x2, y2)
+            }
+        }
     }
-    led.plot(shootingTargetX, shootingTargetY)
-    currentlyShooting = true
+}
+function send_res (to: number, id: number, msg: string, event: number) {
+    message = pack_msg(to, id, 2, msg)
+    event_channel = event
+    control.raiseEvent(
+    1024,
+    1
+    )
+}
+function extract_id (msg: string) {
+    return str_to_long(msg.substr(2, 2))
+}
+function set_timeout (time: number) {
+    timed_out = false
+    wait_until = control.millis() + time
 }
 input.onButtonPressed(Button.AB, function () {
-    if (currentlyShooting == false) {
-        Shoot(targetedPlayer)
+    if (!(is_playing)) {
+        if (this_id != -1) {
+            is_playing = true
+            basic.showIcon(IconNames.Yes)
+        }
     } else {
-        tempNewValue = "" + (targetedPlayer + 1) + "0" + shootingTargetX + shootingTargetY
-        playersHitBoard[targetedPlayer].push(parseInt(tempNewValue))
-        currentlyShooting = false
-        basic.clearScreen()
+        if (currentlyShooting) {
+            hideCursor()
+            basic.clearScreen()
+            fireAtTarget(targetedPlayer)
+        } else {
+            alreadyHit = led.point(cursorPosX, cursorPosY)
+            if (targetedPlayer != this_id) {
+                showCursor()
+                currentlyShooting = true
+            }
+        }
     }
 })
-input.onButtonPressed(Button.B, function () {
-    if (currentlyShooting) {
-        if (alreadyHit == false) {
-            led.unplot(shootingTargetX, shootingTargetY)
-        }
-        shootingTargetY += 1
-        if (shootingTargetY > 4) {
-            shootingTargetY = 0
-        }
-        if (led.point(shootingTargetX, shootingTargetY)) {
-            alreadyHit = true
+radio.onReceivedString(function (receivedString) {
+    if (extract_to(receivedString) == 0 || extract_to(receivedString) == control.deviceSerialNumber()) {
+        let handled_msgs: number[][] = []
+        if (extract_type(receivedString) == 1) {
+            if (awaiting && extract_id(receivedString) == extract_id(message)) {
+                awaiting = false
+            }
+        } else if (extract_type(receivedString) == 2) {
+            if (awaiting && extract_id(receivedString) == extract_id(message)) {
+                response = extract_msg(receivedString)
+                awaiting = false
+            }
+            send_fin(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString))
+        } else if (100 <= extract_type(receivedString) && extract_type(receivedString) < 200) {
+            if (!(awaiting)) {
+                if (handled_msgs.indexOf([radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString)]) == -1) {
+                    handled_msgs.push([radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString)])
+                    received = extract_msg(receivedString)
+                    received_serial_num = radio.receivedPacket(RadioPacketProperty.SerialNumber)
+                    control.raiseEvent(
+                    1024,
+                    extract_type(receivedString)
+                    )
+                }
+                send_fin(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString))
+            }
+        } else if (200 <= extract_type(receivedString) && extract_type(receivedString) < 300) {
+            if (!(awaiting)) {
+                if (handled_msgs.indexOf([radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString)]) == -1) {
+                    handled_msgs.push([radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString)])
+                    received = extract_msg(receivedString)
+                    received_serial_num = radio.receivedPacket(RadioPacketProperty.SerialNumber)
+                    tmp_str = req_handler(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString), extract_type(receivedString), extract_msg(receivedString))
+                    if (can_handle) {
+                        send_res(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString), tmp_str, extract_type(receivedString))
+                    }
+                }
+            }
         } else {
-            alreadyHit = false
+            if (handled_msgs.indexOf([radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString)]) == -1) {
+                handled_msgs.push([radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString)])
+                received = extract_msg(receivedString)
+                received_serial_num = radio.receivedPacket(RadioPacketProperty.SerialNumber)
+                control.raiseEvent(
+                1024,
+                extract_type(receivedString)
+                )
+            }
         }
-        led.plot(shootingTargetX, shootingTargetY)
+    }
+})
+function send_req (to: number, _type: number, msg: string) {
+    message = pack_msg(to, control.millis(), _type, msg)
+    event_channel = 2
+    control.raiseEvent(
+    1024,
+    1
+    )
+    control.waitForEvent(1024, 2)
+    return response
+}
+control.onEvent(1024, 299, function () {
+    basic.showString(received)
+})
+input.onButtonPressed(Button.B, function () {
+    if (!(is_playing)) {
+        basic.showNumber(player_count)
     } else {
         basic.clearScreen()
         targetedPlayer += 1
@@ -80,33 +261,189 @@ input.onButtonPressed(Button.B, function () {
         showBoard(targetedPlayer)
     }
 })
+// Function to fire at the target based on the current cursor position
+function fireAtTarget (targetedPlayer: number) {
+    targetPos = "" + cursorPosX + cursorPosY
+    fireResult = send_req(player_serial_nums[targetedPlayer], 299, targetPos)
+    displayFireResult(fireResult)
+    tempNewValue = "" + (targetedPlayer + 1) + "0" + cursorPosX + cursorPosY
+    playersHitBoard[targetedPlayer].push(parseInt(tempNewValue))
+    currentlyShooting = false
+    cursorPosX = 2
+    cursorPosY = 2
+    basic.pause(100)
+    basic.clearScreen()
+    // Remove this later when implementing turn mode
+    showBoard(targetedPlayer)
+}
+input.onGesture(Gesture.Shake, function () {
+    if (!(is_playing)) {
+        // Fix for connect()
+        connect()
+        if (this_id != -1) {
+            basic.showNumber(this_id)
+        } else {
+            basic.showIcon(IconNames.No)
+        }
+    }
+})
+// Function to hide the cursor
+function hideCursor () {
+    isCursorActive = false
+    led.unplot(cursorPosX, cursorPosY)
+}
+function send_msg (to: number, _type: number, msg: string) {
+    message = pack_msg(to, control.millis(), _type, msg)
+    event_channel = 2
+    control.raiseEvent(
+    1024,
+    1
+    )
+    control.waitForEvent(1024, 2)
+}
+control.onEvent(1024, 11, function () {
+    while (player_serial_nums.length <= received.charCodeAt(0)) {
+        player_serial_nums.push(-1)
+        player_latest_pings.push(-1)
+        player_statuses.push(-1)
+        playersHitBoard.push([])
+    }
+    player_serial_nums[received.charCodeAt(0)] = received_serial_num
+    player_latest_pings[received.charCodeAt(0)] = control.millis()
+    player_statuses[received.charCodeAt(0)] = 1
+})
+// Function to determine the result when the player receives an attack
+function getFireResult (receivedString: string) {
+    x = parseInt(receivedString.charAt(0))
+    y = parseInt(receivedString.charAt(1))
+    checkFire = playerGrid[y][x]
+    if (checkFire) {
+        return "hit"
+    } else {
+        return "miss"
+    }
+}
+// Subject to change
+// Function to show the cursor
+function showCursor () {
+    isCursorActive = true
+    led.plot(cursorPosX, cursorPosY)
+}
+let checkFire = 0
+let y = 0
+let x = 0
+let isCursorActive = false
 let tempNewValue = ""
-let shootingTargetY = 0
-let shootingTargetX = 0
-let alreadyHit = false
+let fireResult = ""
+let targetPos = ""
+let tmp_str = ""
+let received_serial_num = 0
+let awaiting = false
+let currentlyShooting = false
+let event_channel = 0
+let message = ""
+let player_count = 0
+let targetedPlayer = 0
+let is_playing = false
+let can_handle = false
 let tempValueY = ""
 let tempValueX = ""
+let received = ""
 let playersHitBoard: number[][] = []
-let targetedPlayer = 0
-let player_count = 0
+let player_statuses: number[] = []
+let player_latest_pings: number[] = []
+let player_serial_nums: number[] = []
+let response = ""
+let timed_out = false
+let alreadyHit = false
+let accY = 0
+let accX = 0
+let playerGrid: number[][] = []
+let wait_until = 0
 let this_id = 0
-let currentlyShooting = false
+let cursorPosX = 0
+let cursorPosY = 0
+cursorPosY = 2
+cursorPosX = 2
+this_id = -1
+wait_until = -1
 radio.setGroup(101)
-currentlyShooting = false
-this_id = 2
-player_count = 4
-targetedPlayer = 0
-playersHitBoard = [
-[1024, 1041],
-[2014],
-[3011],
-[4002, 4004]
+radio.setTransmitSerialNumber(true)
+// Player grid representing a 5x5 board where each cell can be 0 (empty) or 1 (occupied)
+playerGrid = [
+[
+0,
+0,
+0,
+0,
+0
+],
+[
+0,
+0,
+0,
+0,
+0
+],
+[
+0,
+0,
+0,
+0,
+0
+],
+[
+0,
+0,
+0,
+0,
+0
+],
+[
+0,
+0,
+0,
+0,
+0
 ]
-basic.forever(function () {
-    if (currentlyShooting && alreadyHit == false) {
-        led.toggle(shootingTargetX, shootingTargetY)
-        basic.pause(500)
-        led.toggle(shootingTargetX, shootingTargetY)
-        basic.pause(500)
+]
+loops.everyInterval(1000, function () {
+    player_count = 0
+    for (let index = 0; index <= player_serial_nums.length - 1; index++) {
+        if (index != this_id) {
+            if (control.millis() > player_latest_pings[index] + 10000) {
+                player_statuses[index] = 0
+            } else {
+                player_count += 1
+            }
+        }
+    }
+    if (this_id != -1) {
+        player_count += 1
+        radio.sendString("" + (pack_msg(0, control.millis(), 11, String.fromCharCode(this_id))))
+    }
+})
+loops.everyInterval(300, function () {
+    if (isCursorActive) {
+        updateCursor()
+    }
+})
+control.inBackground(function () {
+    while (true) {
+        control.waitForEvent(1024, 1)
+        awaiting = true
+        while (awaiting) {
+            radio.sendString(message)
+            basic.pause(500)
+            if (wait_until != -1 && control.millis() > wait_until) {
+                wait_until = -1
+                timed_out = true
+                awaiting = false
+            }
+        }
+        control.raiseEvent(
+        1024,
+        event_channel
+        )
     }
 })
