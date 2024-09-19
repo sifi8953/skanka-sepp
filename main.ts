@@ -1,12 +1,5 @@
-function displayFireResult (receivedString: string) {
-    if (receivedString == "hit") {
-        basic.showIcon(IconNames.Happy)
-    } else if (receivedString == "miss") {
-        basic.showIcon(IconNames.Sad)
-    }
-}
 function long_to_str (num: number) {
-    return "" + String.fromCharCode(Math.trunc((num / 2 ** (8 * 0)) % (2 ** 8))) + String.fromCharCode(Math.trunc((num / 2 ** (8 * 1)) % (2 ** 8))) + String.fromCharCode(Math.trunc((num / 2 ** (8 * 2)) % (2 ** 8))) + String.fromCharCode(Math.trunc((num / 2 ** (8 * 3)) % (2 ** 8)))
+    return "" + String.fromCharCode(Math.trunc(num / 2 ** (8 * 0) % 2 ** 8)) + String.fromCharCode(Math.trunc(num / 2 ** (8 * 1) % 2 ** 8)) + String.fromCharCode(Math.trunc(num / 2 ** (8 * 2) % 2 ** 8)) + String.fromCharCode(Math.trunc(num / 2 ** (8 * 3) % 2 ** 8))
 }
 function updateCursor () {
     accX = input.acceleration(Dimension.X)
@@ -32,7 +25,6 @@ function updateCursor () {
 function connect () {
     set_timeout(5000)
     send_req(0, 201, "")
-
     if (timed_out) {
         this_id = 0
     } else {
@@ -134,7 +126,7 @@ function send_fin (to: number, id: number) {
     radio.sendString("" + (pack_msg(to, id, 1, "")))
 }
 function str_to_long (str: string) {
-    return str.charCodeAt(0) * (2 ** (8 * 0)) + str.charCodeAt(1) * (2 ** (8 * 1)) + str.charCodeAt(2) * (2 ** (8 * 2)) + str.charCodeAt(3) * (2 ** (8 * 3))
+    return str.charCodeAt(0) * 2 ** (8 * 0) + str.charCodeAt(1) * 2 ** (8 * 1) + str.charCodeAt(2) * 2 ** (8 * 2) + str.charCodeAt(3) * 2 ** (8 * 3)
 }
 function displayGrid (grid: number[][]) {
     for (let x2 = 0; x2 <= 4; x2++) {
@@ -167,6 +159,9 @@ function showShips () {
 function extract_id (msg: string) {
     return str_to_long(msg.substr(4, 4))
 }
+control.onEvent(1024, 1, function () {
+    awaiting = true
+})
 function set_timeout (time: number) {
     timed_out = false
     wait_until = control.millis() + time
@@ -197,7 +192,7 @@ input.onButtonPressed(Button.AB, function () {
             hideCursor()
             basic.clearScreen()
             fireAtTarget(targetedPlayer)
-            send_msg(player_serial_nums[(this_id+1) % player_count], 199, "")
+            send_msg(player_serial_nums[(this_id + 1) % player_count], 199, "")
             isThisTurn = false
         } else {
             if (targetedPlayer != this_id) {
@@ -212,6 +207,7 @@ input.onButtonPressed(Button.AB, function () {
 })
 radio.onReceivedString(function (receivedString) {
     if (extract_to(receivedString) == 0 || extract_to(receivedString) == control.deviceSerialNumber() || true) {
+        let handled_msgs: string[] = []
         if (extract_type(receivedString) == 1) {
             if (awaiting && extract_id(receivedString) == extract_id(message)) {
                 awaiting = false
@@ -229,8 +225,8 @@ radio.onReceivedString(function (receivedString) {
                     received = extract_msg(receivedString)
                     received_serial_num = radio.receivedPacket(RadioPacketProperty.SerialNumber)
                     control.raiseEvent(
-                        1024,
-                        extract_type(receivedString)
+                    1024,
+                    extract_type(receivedString)
                     )
                 }
                 send_fin(radio.receivedPacket(RadioPacketProperty.SerialNumber), extract_id(receivedString))
@@ -297,7 +293,6 @@ function fireAtTarget (targetedPlayer: number) {
     currentlyShooting = false
     cursorPosX = 2
     cursorPosY = 2
-
     if (fireResult == "0") {
         basic.showIcon(IconNames.No)
     } else {
@@ -312,6 +307,14 @@ function hideCursor () {
     isCursorActive = false
     led.unplot(cursorPosX, cursorPosY)
 }
+control.onEvent(1024, 199, function () {
+    if (is_dead) {
+        send_msg(player_serial_nums[(this_id + 1) % player_count], 199, "")
+    } else {
+        isThisTurn = true
+        basic.showIcon(IconNames.Happy)
+    }
+})
 function send_msg (to: number, _type: number, msg: string) {
     message = pack_msg(to, control.millis(), _type, msg)
     event_channel = 2
@@ -439,16 +442,7 @@ function showCursor () {
     isCursorActive = true
     led.plot(cursorPosX, cursorPosY)
 }
-control.onEvent(1024, 199, function() {
-    if (is_dead) {
-        send_msg(player_serial_nums[(this_id + 1) % player_count], 199, "")
-    } else {
-        isThisTurn = true
-        basic.showIcon(IconNames.Happy)
-    }
-})
-
-let handled_msgs: string[] = []
+let prev_awaiting = false
 let tmp_bool = false
 let countingInt = 0
 let checkFire = 0
@@ -465,14 +459,15 @@ let colided = false
 let done = false
 let changedDirection = false
 let changePos = 0
+let is_dead = false
 let isCursorActive = false
 let tempNewValue = ""
 let fireResult = ""
 let targetPos = ""
 let tmp_str = ""
 let received_serial_num = 0
-let awaiting = false
 let currentlyShooting = false
+let awaiting = false
 let hitY: number[] = []
 let hitX: number[] = []
 let event_channel = 0
@@ -505,7 +500,6 @@ let cursorPosX = 0
 let this_id = 0
 let wait_until = 0
 let timesHit = 0
-let is_dead = false
 wait_until = -1
 this_id = -1
 cursorPosX = 2
@@ -550,6 +544,23 @@ playerGrid = [
 radio.setGroup(286)
 radio.setTransmitSerialNumber(true)
 loops.everyInterval(1000, function () {
+    if (awaiting) {
+        prev_awaiting = true
+        radio.sendString(message)
+        if (wait_until != -1 && control.millis() > wait_until) {
+            wait_until = -1
+            timed_out = true
+            awaiting = false
+        }
+    } else if (prev_awaiting) {
+        prev_awaiting = false
+        control.raiseEvent(
+        1024,
+        event_channel
+        )
+    }
+})
+loops.everyInterval(1000, function () {
     player_count = 0
     for (let index = 0; index <= player_serial_nums.length - 1; index++) {
         if (index != this_id) {
@@ -570,27 +581,5 @@ loops.everyInterval(500, function () {
         showShips()
     } else if (isCursorActive) {
         updateCursor()
-    }
-})
-
-let prev_awaiting = false
-control.onEvent(1024, 1, function() {
-    awaiting = true
-})
-loops.everyInterval(1000, function () {
-    if (awaiting) {
-        prev_awaiting = true
-        radio.sendString(message)
-        if (wait_until != -1 && control.millis() > wait_until) {
-            wait_until = -1
-            timed_out = true
-            awaiting = false
-        }
-    } else if (prev_awaiting) {
-        prev_awaiting = false
-        control.raiseEvent(
-            1024,
-            event_channel
-        )
     }
 })
