@@ -1,7 +1,7 @@
-function long_to_str(num: number) {
+function long_to_str (num: number) {
     return "" + String.fromCharCode(Math.trunc(num / 2 ** (8 * 0) % 2 ** 8)) + String.fromCharCode(Math.trunc(num / 2 ** (8 * 1) % 2 ** 8)) + String.fromCharCode(Math.trunc(num / 2 ** (8 * 2) % 2 ** 8)) + String.fromCharCode(Math.trunc(num / 2 ** (8 * 3) % 2 ** 8))
 }
-function updateCursor() {
+function updateCursor () {
     accX = input.acceleration(Dimension.X)
     accY = input.acceleration(Dimension.Y)
     if (!(alreadyHit)) {
@@ -22,7 +22,7 @@ function updateCursor() {
         led.plot(cursorPosX, cursorPosY)
     }
 }
-function connect() {
+function connect () {
     set_timeout(5000)
     send_req(255, 255, 201, "")
     if (timed_out) {
@@ -40,13 +40,13 @@ function connect() {
         }
     }
 }
-function extract_to(msg: string) {
+function extract_to (msg: string) {
     return msg.charCodeAt(1)
 }
-function pack_msg(_from: number, to: number, _type: number, id: number, msg: string) {
+function pack_msg (_from: number, to: number, _type: number, id: number, msg: string) {
     return "" + String.fromCharCode(_from) + String.fromCharCode(to) + String.fromCharCode(_type) + long_to_str(id) + msg
 }
-function showBoard(target: number) {
+function showBoard (target: number) {
     // Check playersHitBoard[targetedPlayer] is init before push
     if (!(playersHitBoard[target]) || playersHitBoard[target].length == 0) {
         return
@@ -62,7 +62,7 @@ function showBoard(target: number) {
         led.plotBrightness(parseInt(tempValueX), parseInt(tempValueY), led_value)
     }
 }
-function req_handler(_from: number, id: number, _type: number, msg: string) {
+function req_handler (_from: number, id: number, _type: number, msg: string) {
     can_handle = true
     if (_type == 201) {
         if (this_id == -1) {
@@ -88,10 +88,10 @@ function req_handler(_from: number, id: number, _type: number, msg: string) {
         return ""
     }
 }
-function extract_type(msg: string) {
+function extract_type (msg: string) {
     return msg.charCodeAt(2)
 }
-function extract_msg(msg: string) {
+function extract_msg (msg: string) {
     return msg.substr(7, msg.length - 7)
 }
 input.onButtonPressed(Button.A, function () {
@@ -121,13 +121,13 @@ input.onButtonPressed(Button.A, function () {
         }
     }
 })
-function send_fin(_from: number, to: number, id: number) {
+function send_fin (_from: number, to: number, id: number) {
     radio.sendString("" + (pack_msg(_from, to, 1, id, "")))
 }
-function str_to_long(str: string) {
+function str_to_long (str: string) {
     return str.charCodeAt(0) * 2 ** (8 * 0) + str.charCodeAt(1) * 2 ** (8 * 1) + str.charCodeAt(2) * 2 ** (8 * 2) + str.charCodeAt(3) * 2 ** (8 * 3)
 }
-function displayGrid(grid: number[][]) {
+function displayGrid (grid: number[][]) {
     for (let x2 = 0; x2 <= 4; x2++) {
         for (let y2 = 0; y2 <= 4; y2++) {
             if (grid[y2][x2] == 1) {
@@ -138,15 +138,15 @@ function displayGrid(grid: number[][]) {
         }
     }
 }
-function send_res(_from: number, to: number, id: number, msg: string, event: number) {
+function send_res (_from: number, to: number, id: number, msg: string, event: number) {
     message = pack_msg(_from, to, 2, id, msg)
     event_channel = event
     control.raiseEvent(
-        1024,
-        1
+    1024,
+    1
     )
 }
-function showShips() {
+function showShips () {
     basic.clearScreen()
     for (let index2 = 0; index2 <= allX.length - 1; index2++) {
         led.plotBrightness(allX[index2], allY[index2], 255)
@@ -155,13 +155,13 @@ function showShips() {
         led.plotBrightness(hitX[index3], hitY[index3], 32)
     }
 }
-function extract_id(msg: string) {
+function extract_id (msg: string) {
     return str_to_long(msg.substr(3, 4))
 }
 control.onEvent(1024, 1, function () {
     awaiting = true
 })
-function set_timeout(time: number) {
+function set_timeout (time: number) {
     timed_out = false
     wait_until = control.millis() + time
 }
@@ -226,8 +226,8 @@ radio.onReceivedString(function (receivedString) {
                     received = extract_msg(receivedString)
                     received_from = extract_from(receivedString)
                     control.raiseEvent(
-                        1024,
-                        extract_type(receivedString)
+                    1024,
+                    extract_type(receivedString)
                     )
                 }
                 send_fin(this_id, extract_from(receivedString), extract_id(receivedString))
@@ -250,19 +250,19 @@ radio.onReceivedString(function (receivedString) {
                 received = extract_msg(receivedString)
                 received_from = extract_from(receivedString)
                 control.raiseEvent(
-                    1024,
-                    extract_type(receivedString)
+                1024,
+                extract_type(receivedString)
                 )
             }
         }
     }
 })
-function send_req(_from: number, to: number, _type: number, msg: string) {
+function send_req (_from: number, to: number, _type: number, msg: string) {
     message = pack_msg(_from, to, _type, control.millis(), msg)
     event_channel = 2
     control.raiseEvent(
-        1024,
-        1
+    1024,
+    1
     )
     control.waitForEvent(1024, 2)
     return response
@@ -287,7 +287,7 @@ input.onButtonPressed(Button.B, function () {
         }
     }
 })
-function fireAtTarget(targetedPlayer: number) {
+function fireAtTarget (targetedPlayer: number) {
     targetPos = "" + cursorPosX + cursorPosY
     fireResult = send_req(this_id, targetedPlayer, 219, targetPos)
     tempNewValue = "" + (targetedPlayer + 1) + "0" + cursorPosX + cursorPosY + fireResult
@@ -309,7 +309,7 @@ function fireAtTarget(targetedPlayer: number) {
     // Remove this later when implementing turn mode
     showBoard(targetedPlayer)
 }
-function hideCursor() {
+function hideCursor () {
     isCursorActive = false
     led.unplot(cursorPosX, cursorPosY)
 }
@@ -324,16 +324,16 @@ control.onEvent(1024, 199, function () {
         basic.showIcon(IconNames.Happy)
     }
 })
-function send_msg(_from: number, to: number, _type: number, msg: string) {
+function send_msg (_from: number, to: number, _type: number, msg: string) {
     message = pack_msg(_from, to, _type, control.millis(), msg)
     event_channel = 2
     control.raiseEvent(
-        1024,
-        1
+    1024,
+    1
     )
     control.waitForEvent(1024, 2)
 }
-function genPos(num: number, num2: number, num3: number, array: number[], array2: number[]) {
+function genPos (num: number, num2: number, num3: number, array: number[], array2: number[]) {
     for (let index22 = 0; index22 <= num - 2; index22++) {
         if (changePos < 4 && changedDirection == false) {
             changePos = changePos + 1
@@ -348,7 +348,7 @@ function genPos(num: number, num2: number, num3: number, array: number[], array2
         array2.push(num3)
     }
 }
-function didCollide(length2: number) {
+function didCollide (length2: number) {
     done = false
     colided = false
     for (let lengthPoint = 0; lengthPoint <= length2 - 1; lengthPoint++) {
@@ -370,10 +370,10 @@ control.onEvent(1024, 11, function () {
         player_count += 1
     }
 })
-function extract_from(msg: string) {
+function extract_from (msg: string) {
     return msg.charCodeAt(0)
 }
-function generateShips(length: number) {
+function generateShips (length: number) {
     while (0 == 0) {
         generated = false
         colided = true
@@ -412,7 +412,7 @@ function generateShips(length: number) {
         }
     }
 }
-function getFireResult(receivedString: string) {
+function getFireResult (receivedString: string) {
     x = parseInt(receivedString.charAt(0))
     y = parseInt(receivedString.charAt(1))
     checkFire = playerGrid[y][x]
@@ -422,7 +422,7 @@ function getFireResult(receivedString: string) {
         return "miss"
     }
 }
-function ifHit(x: number, y: number, xPos: any[], yPos: any[]) {
+function ifHit (x: number, y: number, xPos: any[], yPos: any[]) {
     while (countingInt < allX.length) {
         if (x == allX[countingInt] && y == allY[countingInt]) {
             tmp_bool = true
@@ -446,7 +446,7 @@ function ifHit(x: number, y: number, xPos: any[], yPos: any[]) {
     }
     countingInt = 0
 }
-function showCursor() {
+function showCursor () {
     isCursorActive = true
     led.plot(cursorPosX, cursorPosY)
 }
@@ -512,41 +512,41 @@ this_id = -1
 cursorPosX = 2
 cursorPosY = 2
 playerGrid = [
-    [
-        0,
-        0,
-        0,
-        0,
-        0
-    ],
-    [
-        0,
-        0,
-        0,
-        0,
-        0
-    ],
-    [
-        0,
-        0,
-        0,
-        0,
-        0
-    ],
-    [
-        0,
-        0,
-        0,
-        0,
-        0
-    ],
-    [
-        0,
-        0,
-        0,
-        0,
-        0
-    ]
+[
+0,
+0,
+0,
+0,
+0
+],
+[
+0,
+0,
+0,
+0,
+0
+],
+[
+0,
+0,
+0,
+0,
+0
+],
+[
+0,
+0,
+0,
+0,
+0
+],
+[
+0,
+0,
+0,
+0,
+0
+]
 ]
 radio.setGroup(286)
 loops.everyInterval(500, function () {
@@ -564,8 +564,8 @@ loops.everyInterval(500, function () {
     } else if (prev_awaiting) {
         prev_awaiting = false
         control.raiseEvent(
-            1024,
-            event_channel
+        1024,
+        event_channel
         )
     }
 })
