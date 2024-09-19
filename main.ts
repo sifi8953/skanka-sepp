@@ -6,7 +6,7 @@ function displayFireResult (receivedString: string) {
     }
 }
 function long_to_str (num: number) {
-    return "" + String.fromCharCode(num % 2 ** 16) + String.fromCharCode(Math.trunc(num / 2 ** 16))
+    return "" + String.fromCharCode(Math.trunc((num / 2 ** (8 * 0)) % (2 ** 8))) + String.fromCharCode(Math.trunc((num / 2 ** (8 * 1)) % (2 ** 8))) + String.fromCharCode(Math.trunc((num / 2 ** (8 * 2)) % (2 ** 8))) + String.fromCharCode(Math.trunc((num / 2 ** (8 * 3)) % (2 ** 8)))
 }
 function updateCursor () {
     accX = input.acceleration(Dimension.X)
@@ -53,7 +53,7 @@ function connect () {
     }
 }
 function extract_to (msg: string) {
-    return str_to_long(msg.substr(0, 2))
+    return str_to_long(msg.substr(0, 4))
 }
 function pack_msg (to: number, id: number, _type: number, msg: string) {
     return "" + long_to_str(to) + long_to_str(id) + String.fromCharCode(_type) + msg
@@ -69,7 +69,7 @@ function showBoard (target: number) {
         temp_has_hit = convertToText(value).substr(4, 1)
         led_value = 255
         if (temp_has_hit == "0") {
-            led_value = 128
+            led_value = 32
         }
         led.plotBrightness(parseInt(tempValueX), parseInt(tempValueY), led_value)
     }
@@ -89,7 +89,7 @@ function req_handler (_from: number, id: number, _type: number, msg: string) {
                 return String.fromCharCode(player_serial_nums.length)
             }
         }
-    } else if (_type == 299) {
+    } else if (_type == 219) {
         has_hit = false
         ifHit(parseInt(msg.substr(0, 1)), parseInt(msg.substr(1, 1)), allX, allY)
         if (has_hit) {
@@ -103,10 +103,10 @@ function req_handler (_from: number, id: number, _type: number, msg: string) {
     }
 }
 function extract_type (msg: string) {
-    return msg.charCodeAt(4)
+    return msg.charCodeAt(8)
 }
 function extract_msg (msg: string) {
-    return msg.substr(5, msg.length - 5)
+    return msg.substr(9, msg.length - 9)
 }
 input.onButtonPressed(Button.A, function () {
     if (!(is_playing)) {
@@ -134,7 +134,7 @@ function send_fin (to: number, id: number) {
     radio.sendString("" + (pack_msg(to, id, 1, "")))
 }
 function str_to_long (str: string) {
-    return str.charCodeAt(0) + str.charCodeAt(1) * 2 ** 16
+    return str.charCodeAt(0) * (2 ** (8 * 0)) + str.charCodeAt(1) * (2 ** (8 * 1)) + str.charCodeAt(2) * (2 ** (8 * 2)) + str.charCodeAt(3) * (2 ** (8 * 3))
 }
 function displayGrid (grid: number[][]) {
     for (let x2 = 0; x2 <= 4; x2++) {
@@ -161,11 +161,11 @@ function showShips () {
         led.plotBrightness(allX[index2], allY[index2], 255)
     }
     for (let index3 = 0; index3 <= hitX.length - 1; index3++) {
-        led.plotBrightness(hitX[index3], hitY[index3], 76)
+        led.plotBrightness(hitX[index3], hitY[index3], 32)
     }
 }
 function extract_id (msg: string) {
-    return str_to_long(msg.substr(2, 2))
+    return str_to_long(msg.substr(4, 4))
 }
 function set_timeout (time: number) {
     timed_out = false
@@ -211,10 +211,6 @@ input.onButtonPressed(Button.AB, function () {
     }
 })
 radio.onReceivedString(function (receivedString) {
-    led.plot(0, 0)
-    basic.pause(100)
-    led.unplot(0, 0)
-
     if (extract_to(receivedString) == 0 || extract_to(receivedString) == control.deviceSerialNumber() || true) {
         if (extract_type(receivedString) == 1) {
             if (awaiting && extract_id(receivedString) == extract_id(message)) {
@@ -291,7 +287,7 @@ input.onButtonPressed(Button.B, function () {
 })
 function fireAtTarget (targetedPlayer: number) {
     targetPos = "" + cursorPosX + cursorPosY
-    fireResult = send_req(player_serial_nums[targetedPlayer], 299, targetPos)
+    fireResult = send_req(player_serial_nums[targetedPlayer], 219, targetPos)
     tempNewValue = "" + (targetedPlayer + 1) + "0" + cursorPosX + cursorPosY + fireResult
     // Check playersHitBoard[targetedPlayer] is init before push
     if (!(playersHitBoard[targetedPlayer])) {
@@ -432,12 +428,6 @@ function ifHit (x: number, y: number, xPos: any[], yPos: any[]) {
             }
             if (allX.length == hitX.length) {
                 is_dead = true
-                music.play(music.tonePlayable(523, music.beat(BeatFraction.Whole)), music.PlaybackMode.UntilDone)
-                music.play(music.tonePlayable(494, music.beat(BeatFraction.Whole)), music.PlaybackMode.UntilDone)
-                music.play(music.tonePlayable(440, music.beat(BeatFraction.Whole)), music.PlaybackMode.UntilDone)
-                music.play(music.tonePlayable(294, music.beat(BeatFraction.Half)), music.PlaybackMode.UntilDone)
-                music.play(music.tonePlayable(330, music.beat(BeatFraction.Half)), music.PlaybackMode.UntilDone)
-                music.play(music.tonePlayable(247, music.beat(BeatFraction.Whole)), music.PlaybackMode.UntilDone)
             }
             break;
         }
@@ -559,7 +549,7 @@ playerGrid = [
 ]
 radio.setGroup(286)
 radio.setTransmitSerialNumber(true)
-loops.everyInterval(3000, function () {
+loops.everyInterval(1000, function () {
     player_count = 0
     for (let index = 0; index <= player_serial_nums.length - 1; index++) {
         if (index != this_id) {
@@ -572,9 +562,7 @@ loops.everyInterval(3000, function () {
     }
     if (this_id != -1) {
         player_count += 1
-        if (false) {
-            radio.sendString("" + (pack_msg(0, control.millis(), 11, String.fromCharCode(this_id))))
-        }
+        radio.sendString("" + (pack_msg(0, control.millis(), 11, String.fromCharCode(this_id))))
     }
 })
 loops.everyInterval(500, function () {
