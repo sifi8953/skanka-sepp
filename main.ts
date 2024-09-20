@@ -4,9 +4,7 @@ function long_to_str (num: number) {
 function updateCursor () {
     accX = input.acceleration(Dimension.X)
     accY = input.acceleration(Dimension.Y)
-    if (!(alreadyHit)) {
-        led.unplot(cursorPosX, cursorPosY)
-    }
+    led.plotBrightness(cursorPosX, cursorPosY, alreadyHit)
     if (accX < -500) {
         cursorPosX = (cursorPosX - 1 + 5) % 5
     } else if (accX > 500) {
@@ -17,10 +15,8 @@ function updateCursor () {
     } else if (accY > 500) {
         cursorPosY = (cursorPosY + 1) % 5
     }
-    alreadyHit = led.point(cursorPosX, cursorPosY)
-    if (!(alreadyHit)) {
-        led.plot(cursorPosX, cursorPosY)
-    }
+    alreadyHit = led.pointBrightness(cursorPosX, cursorPosY)
+    led.plot(cursorPosX, cursorPosY)
 }
 function connect () {
     set_timeout(5000)
@@ -199,7 +195,7 @@ input.onButtonPressed(Button.AB, function () {
                 if (targetedPlayer != this_id) {
                     basic.clearScreen()
                     showBoard(targetedPlayer)
-                    alreadyHit = led.point(cursorPosX, cursorPosY)
+                    alreadyHit = led.pointBrightness(cursorPosX, cursorPosY)
                     showCursor()
                     currentlyShooting = true
                 }
@@ -426,6 +422,7 @@ function getFireResult (receivedString: string) {
 function ifHit (x: number, y: number, xPos: any[], yPos: any[]) {
     while (countingInt < allX.length) {
         if (x == allX[countingInt] && y == allY[countingInt]) {
+            has_hit = true
             tmp_bool = true
             for (let index4 = 0; index4 <= hitX.length - 1; index4++) {
                 if (hitX[index4] == x && hitY[index4] == y) {
@@ -435,7 +432,6 @@ function ifHit (x: number, y: number, xPos: any[], yPos: any[]) {
             if (tmp_bool) {
                 hitX.push(x)
                 hitY.push(y)
-                has_hit = true
             }
             if (allX.length == hitX.length) {
                 is_dead = true
@@ -497,7 +493,7 @@ let playersHitBoard: number[][] = []
 let player_count = 0
 let response = ""
 let timed_out = false
-let alreadyHit = false
+let alreadyHit = 0
 let accY = 0
 let accX = 0
 let playerGrid: number[][] = []
@@ -549,7 +545,7 @@ playerGrid = [
 0
 ]
 ]
-radio.setGroup(286)
+radio.setGroup(153)
 loops.everyInterval(500, function () {
     if (this_id != -1) {
         radio.sendString("" + (pack_msg(this_id, 255, 11, control.millis(), "")))
