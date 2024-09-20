@@ -183,6 +183,7 @@ input.onButtonPressed(Button.AB, function () {
                 generateShips(3)
                 generateShips(2)
                 if (this_id == 0) {
+                    targetedPlayer = 1
                     isThisTurn = true
                     basic.showIcon(IconNames.Happy)
                 }
